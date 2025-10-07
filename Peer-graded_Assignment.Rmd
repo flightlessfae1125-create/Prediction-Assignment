@@ -1,0 +1,121 @@
+---
+title: "Peer-graded_Assignment"
+output:
+  pdf_document: default
+  html_document: default
+date: "2025-10-07"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+# --- 1. Setup: Load Libraries and Set Seed ---
+
+# Load necessary libraries
+library(caret)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+
+# Set seed for reproducibility
+set.seed(12345)
+
+
+# --- 2. Data Loading and Cleaning ---
+
+# Load datasets
+training_raw <- read.csv("pml-training.csv", na.strings = c("NA", ""))
+testing_raw <- read.csv("pml-testing.csv", na.strings = c("NA", ""))
+
+# Remove columns with a high percentage of missing values
+good_cols <- colSums(is.na(training_raw)) < (nrow(training_raw) * 0.80)
+training_cleaned <- training_raw[, good_cols]
+testing_cleaned <- testing_raw[, good_cols]
+
+# Remove metadata columns
+training_final <- training_cleaned[, -c(1:7)]
+testing_final <- testing_cleaned[, -c(1:7)]
+
+# **NEW CORRECTION:** Convert the outcome variable 'classe' to a factor.
+# This is the key step to ensure levels are consistent everywhere.
+training_final$classe <- as.factor(training_final$classe)
+
+
+# --- 3. Data Partitioning for Model Validation ---
+
+# Split the cleaned training data into a training subset (75%) and a validation subset (25%)
+inTrain <- createDataPartition(y = training_final$classe, p = 0.75, list = FALSE)
+training_subset <- training_final[inTrain, ]
+validation_subset <- training_final[-inTrain, ]
+
+
+# --- 4. Model Training and Cross-Validation ---
+
+# Model 1: Decision Tree (rpart)
+trControl_dt <- trainControl(method = "cv", number = 5)
+model_dt <- train(classe ~ ., 
+                  data = training_subset, 
+                  method = "rpart", 
+                  trControl = trControl_dt)
+
+# Model 2: Random Forest (rf)
+# This step can take a few minutes to run.
+trControl_rf <- trainControl(method = "cv", number = 5)
+model_rf <- train(classe ~ ., 
+                  data = training_subset, 
+                  method = "rf", 
+                  trControl = trControl_rf)
+
+
+# --- 5. Model Evaluation and Selection ---
+
+# Predictions with the Decision Tree model
+pred_dt <- predict(model_dt, newdata = validation_subset)
+cm_dt <- confusionMatrix(data = pred_dt, reference = validation_subset$classe)
+print("Decision Tree Performance on Validation Set:")
+print(cm_dt)
+
+# Predictions with the Random Forest model
+pred_rf <- predict(model_rf, newdata = validation_subset)
+cm_rf <- confusionMatrix(data = pred_rf, reference = validation_subset$classe)
+print("Random Forest Performance on Validation Set:")
+print(cm_rf)
+
+# Model Selection: The Random Forest model is chosen due to higher accuracy.
+
+
+# --- 6. Final Prediction on the Official Test Set ---
+
+# Use the chosen model (Random Forest) to predict the 20 outcomes
+final_predictions <- predict(model_rf, newdata = testing_final)
+
+# Display the final 20 predictions
+print("Final Predictions for the 20 Test Cases:")
+print(final_predictions)
+```
+
+
+
